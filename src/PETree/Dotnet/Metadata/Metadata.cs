@@ -32,7 +32,11 @@ public class Metadata : Node
         }
 
         var buffer = new byte[4];
-        stream.ReadExactly(buffer, 0, 4);
+        if (stream.Read(buffer, 0, 4) != 4)
+        {
+            return false;
+        }
+
         return BitConverter.ToUInt32(buffer, 0) == BSJBSignature;
     }
 
