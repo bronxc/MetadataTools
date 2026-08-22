@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using GuiLabs.Utilities;
@@ -14,6 +15,46 @@ public class Metadata : Node
     public Metadata()
     {
         Text = "Metadata";
+    }
+
+    public const uint BSJBSignature = 0x424A5342; // "BSJB"
+
+    /// <summary>
+    /// True if the file starts with the BSJB metadata signature,
+    /// e.g. a standalone Portable PDB (not wrapped in a PE file).
+    /// </summary>
+    public static bool IsMetadataFile(string filePath)
+    {
+        using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        if (stream.Length < 128)
+        {
+            return false;
+        }
+
+        var buffer = new byte[4];
+        stream.ReadExactly(buffer, 0, 4);
+        return BitConverter.ToUInt32(buffer, 0) == BSJBSignature;
+    }
+
+    /// <summary>
+    /// Reads a standalone metadata blob such as a Portable PDB file.
+    /// </summary>
+    public static Metadata ReadFromFile(string filePath, bool inMemory = true)
+    {
+        using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        Stream stream = fileStream;
+        if (inMemory)
+        {
+            var memoryStream = new MemoryStream((int)fileStream.Length);
+            fileStream.CopyTo(memoryStream);
+            memoryStream.Position = 0;
+            stream = memoryStream;
+        }
+
+        var metadata = new Metadata { Buffer = new StreamBuffer(stream) };
+        metadata.Parse();
+        metadata.Check();
+        return metadata;
     }
 
     public override void Parse()

@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using GuiLabs.FileFormat;
 using GuiLabs.FileFormat.PE;
+using GuiLabs.FileFormat.PE.Dotnet;
 using GuiLabs.Utilities;
 
 class Program
@@ -17,17 +18,18 @@ class Program
         var filePath = args[0];
         if (Directory.Exists(filePath))
         {
-            var dlls = Directory.GetFiles(filePath, "*.dll", SearchOption.AllDirectories);
-            foreach (var dll in dlls)
+            var files = Directory.GetFiles(filePath, "*.dll", SearchOption.AllDirectories)
+                .Concat(Directory.GetFiles(filePath, "*.pdb", SearchOption.AllDirectories));
+            foreach (var file in files)
             {
                 try
                 {
-                    System.Console.WriteLine($"Reading {dll}");
-                    var file = PEFile.ReadFromFile(dll);
+                    System.Console.WriteLine($"Reading {file}");
+                    var node = ReadFile(file);
                 }
                 catch (System.Exception ex)
                 {
-                    System.Console.WriteLine($"Exception when reading {dll}: {ex.ToString()}");
+                    System.Console.WriteLine($"Exception when reading {file}: {ex.ToString()}");
                 }
             }
 
@@ -39,17 +41,18 @@ class Program
             return;
         }
 
-        var peFile = PEFile.ReadFromFile(filePath);
+        var root = ReadFile(filePath);
 
         if (args.Length >= 2 && args[1] == "--analyze")
         {
-            AnalyzeUnknowns(peFile);
+            AnalyzeUnknowns(root);
             return;
         }
 
-        var textFile = Path.ChangeExtension(filePath, ".txt");
+        // Keep <name>.pdb and <name>.dll dumps side by side without clobbering each other
+        var textFile = root is Metadata ? filePath + ".txt" : Path.ChangeExtension(filePath, ".txt");
 
-        var text = peFile.GetText();
+        var text = root.GetText();
         File.WriteAllText(textFile, text);
 
         if (args.Length == 2)
@@ -60,13 +63,23 @@ class Program
                 return;
             }
 
-            var peFile2 = PEFile.ReadFromFile(filePath2);
+            var root2 = ReadFile(filePath2);
 
-            var diff = Difference.Diff(peFile, peFile2);
+            var diff = Difference.Diff(root, root2);
         }
     }
 
-    static void AnalyzeUnknowns(PEFile peFile)
+    static Node ReadFile(string filePath)
+    {
+        if (Metadata.IsMetadataFile(filePath))
+        {
+            return Metadata.ReadFromFile(filePath);
+        }
+
+        return PEFile.ReadFromFile(filePath);
+    }
+
+    static void AnalyzeUnknowns(Node peFile)
     {
         var unknowns = new List<(string section, int start, int length, byte[] sample)>();
         CollectUnknowns(peFile, null, unknowns);
