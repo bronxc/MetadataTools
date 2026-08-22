@@ -457,6 +457,12 @@ public class PEFile : Node
         {
             long entryOffset = (long)entry.Offset.ReadUInt64();
             long entrySize = (long)entry.Size.ReadUInt64();
+            long compressedSize = entry.CompressedSize is { } compressed ? (long)compressed.ReadUInt64() : 0;
+            if (compressedSize > 0)
+            {
+                entrySize = compressedSize;
+            }
+
             if (entrySize > 0 && entryOffset > 0 && entryOffset + entrySize <= System.Math.Min(fileLength, int.MaxValue))
             {
                 var bundledFile = new BundledFile
